@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -48,6 +49,20 @@ import io.reactivex.rxjava3.disposables.Disposable;
 
 
 public class MainActivity extends AppCompatActivity {
+
+    // UWB-related variables
+    private UwbManager uwbManager;
+    private AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
+
+    // Declare UI components as class-level variables
+    private Button initRangingButton;
+    private Button startRangingButton;
+    private Switch roleSwitch;
+    private TextView role;
+    private TextView distanceDisplay;
+    private TextView rawDistanceDisplay;
+    private LineChart lineChart;
+    private Button sendEmailButton;
 
     private static final String TAG = "DemoUwbApp";
 
@@ -72,33 +87,16 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
+        // Check and request UWB ranging permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.UWB_RANGING) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.UWB_RANGING}, 123);
         }
 
-        UwbManager uwbManager = UwbManager.createInstance(this);
-        AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
+        // Initialize the UI components
+        initializeUI();
 
-        Button initRangingButton = findViewById(R.id.get_values_button);
-        Button startRangingButton = findViewById(R.id.communicate_button);
-        Switch roleSwitch = findViewById(R.id.is_controller);
-        TextView role = findViewById(R.id.role_text_view);
-        TextView distanceDisplay = findViewById(R.id.distance_display);
-        TextView rawDistanceDisplay = findViewById(R.id.raw_distance_display);
-        LineChart lineChart = findViewById(R.id.line_chart);
-        Button sendEmailButton = findViewById(R.id.send_email_button);
-
-        initChart(lineChart);
-
-        sendEmailButton.setOnClickListener(v -> {
-            try {
-                File csvFile = generateCSVFile(lineChart);
-                sendEmail(csvFile);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        // Initialize the UWB manager
+        initializeUwbManager();
 
         new Thread(() -> {
             AtomicReference<UwbClientSessionScope> currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
@@ -183,6 +181,53 @@ public class MainActivity extends AppCompatActivity {
             }));
         }).start();
     }
+
+    private void initializeUwbManager() {
+        // Initialize the UWB manager
+        uwbManager = UwbManager.createInstance(this);
+
+        // Set up the AtomicReference for observing ranging results (initialized as null)
+        rangingResultObservable.set(null);
+    }
+
+
+    private void initializeUI() {
+        // Initialize UI components
+        initRangingButton = findViewById(R.id.get_values_button);
+        startRangingButton = findViewById(R.id.communicate_button);
+        roleSwitch = findViewById(R.id.is_controller);
+        role = findViewById(R.id.role_text_view);
+        distanceDisplay = findViewById(R.id.distance_display);
+        rawDistanceDisplay = findViewById(R.id.raw_distance_display);
+        lineChart = findViewById(R.id.line_chart);
+        sendEmailButton = findViewById(R.id.send_email_button);
+
+        // Initialize the chart
+        initChart(lineChart);
+
+        // Set up the send email button
+        sendEmailButton.setOnClickListener(v -> {
+            try {
+                File csvFile = generateCSVFile(lineChart);
+                sendEmail(csvFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
+        // Set up the role switch
+        roleSwitch.setOnClickListener(v -> {
+            if (roleSwitch.isChecked()) {
+                role.setText("Controller");
+            } else {
+                role.setText("Controlee");
+            }
+        });
+
+        // Set the initial state of the switch
+        roleSwitch.callOnClick(); // Ensures the switch sets its initial text
+    }
+
 
     private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay, LineChart lineChart) {
         if (rangingResult.getPosition().getDistance() != null) {
