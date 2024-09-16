@@ -8,7 +8,11 @@ import android.widget.Button;
 import android.view.View;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.graphics.Color;
+import android.content.Intent;
+import android.net.Uri;
 
+import androidx.core.content.FileProvider;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -28,8 +32,19 @@ import androidx.core.uwb.rxjava3.UwbManagerRx;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
 import io.reactivex.rxjava3.disposables.Disposable;
+
+import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
+import java.util.ArrayList;
+import java.util.List;
+
 
 
 public class MainActivity extends AppCompatActivity {
@@ -47,14 +62,10 @@ public class MainActivity extends AppCompatActivity {
     private static final int NUM_MEASUREMENTS = 10;
     private static final double[] distanceArray = new double[NUM_MEASUREMENTS];
     private static int distanceIndex = 0;
-    private static final int DISTANCE_HYSTERESIS = 10;
+    private static final int DISTANCE_HYSTERESIS_METERS = 10;
 
     private static final double[] azimuthArray = new double[NUM_MEASUREMENTS];
     private static final double[] elevationArray = new double[NUM_MEASUREMENTS];
-
-
-
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,8 +86,22 @@ public class MainActivity extends AppCompatActivity {
         TextView role = findViewById(R.id.role_text_view);
 
         TextView distanceDisplay = findViewById(R.id.distance_display);
-        TextView elevationDisplay = findViewById(R.id.elevation_display);
-        TextView azimuthDisplay = findViewById(R.id.azimuth_display);
+        TextView rawDistanceDisplay = findViewById(R.id.raw_distance_display);
+
+        LineChart lineChart = findViewById(R.id.line_chart);
+        Button sendEmailButton = findViewById(R.id.send_email_button);
+
+        initChart(lineChart);
+
+        sendEmailButton.setOnClickListener(v -> {
+            try {
+                File csvFile = generateCSVFile(lineChart);
+                sendEmail(csvFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
 
 
         new Thread(() -> {
@@ -142,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
 
                     rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(rangingResult -> {
                                 if (rangingResult instanceof RangingResult.RangingResultPosition) {
-                                    handleRangingResult((RangingResult.RangingResultPosition) rangingResult, distanceDisplay, azimuthDisplay, elevationDisplay);
+                                    handleRangingResult((RangingResult.RangingResultPosition) rangingResult, distanceDisplay, rawDistanceDisplay, lineChart);
                                 }  else if (rangingResult instanceof RangingResult.RangingResultPeerDisconnected) {
 
                                     // Display dialog to inform about lost connection
@@ -163,53 +188,153 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView distanceDisplay, TextView azimuthDisplay, TextView elevationDisplay) {
+    private File generateCSVFile(LineChart lineChart) throws IOException {
+        File csvFile = new File(getExternalFilesDir(null), "chart_data.csv");
+        FileWriter writer = new FileWriter(csvFile);
+
+        LineData lineData = lineChart.getData();
+        if (lineData != null) {
+            // Assuming there are exactly two data sets
+            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0);
+            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1);
+
+            List<Entry> entries1 = dataSet1.getEntriesForXValue(0);
+            List<Entry> entries2 = dataSet2.getEntriesForXValue(0);
+
+            // Write header
+            writer.append(dataSet1.getLabel()).append(",").append(dataSet2.getLabel()).append("\n");
+
+            // Write data
+            for (int i = 0; i < entries1.size(); i++) {
+                Entry entry1 = entries1.get(i);
+                Entry entry2 = entries2.get(i);
+                Log.d(TAG, "Entry1: " + entry1.getX() + ", " + entry1.getY());
+                writer.append(String.valueOf(entry1.getX())).append(",").append(String.valueOf(entry1.getY())).append("\n");
+                writer.append(String.valueOf(entry2.getX())).append(",").append(String.valueOf(entry2.getY())).append("\n");
+            }
+        }
+
+        writer.flush();
+        writer.close();
+        return csvFile;
+    }
+
+
+    private void sendEmail(File csvFile) {
+        Uri contentUri = FileProvider.getUriForFile(this, "com.example.uwbdemoapp.fileprovider", csvFile);
+
+        Intent emailIntent = new Intent(Intent.ACTION_SEND);
+        emailIntent.setType("text/csv");
+        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Chart Data");
+        emailIntent.putExtra(Intent.EXTRA_TEXT, "Please find the chart data attached.");
+        emailIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+        emailIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        startActivity(Intent.createChooser(emailIntent, "Send email using:"));
+    }
+
+    private void initChart(LineChart lineChart) {
+        List<Entry> rawEntries = new ArrayList<>();
+        List<Entry> mvaEntries = new ArrayList<>();
+
+        LineDataSet rawDataSet = new LineDataSet(rawEntries, "Raw Distance");
+        LineDataSet mvaDataSet = new LineDataSet(mvaEntries, "MVA Distance");
+//
+//        rawDataSet.addEntry(new Entry(1, 0));
+//        rawDataSet.addEntry(new Entry(2, 10));
+//
+//        mvaDataSet.addEntry(new Entry(1, 20));
+//        mvaDataSet.addEntry(new Entry(2, 30));
+
+
+        // Set colors for the datasets
+        rawDataSet.setColor(Color.RED); // Line color
+        rawDataSet.setCircleColor(Color.RED); // Dot color
+
+        mvaDataSet.setColor(Color.GREEN); // Line color
+        mvaDataSet.setCircleColor(Color.GREEN); // Dot color
+
+        LineData lineData = new LineData(rawDataSet, mvaDataSet);
+        lineChart.setData(lineData);
+        lineChart.invalidate(); // Refresh the chart
+    }
+
+    private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay, LineChart lineChart) {
         if (rangingResult.getPosition().getDistance() != null) {
 
-            double distance = rangingResult.getPosition().getDistance().getValue();
-            distance = movingAverage(distanceArray, distance, distanceIndex);
+            double MvaDistance;
+            String mvaDistanceString;
+            String rawDistanceString;
+            double rawDistance = rangingResult.getPosition().getDistance().getValue();
+
+            // Initialize array with newMeas if index is 0
+            if (0 == distanceIndex) {
+                Arrays.fill(distanceArray, rawDistance);
+                MvaDistance = rawDistance;
+            }
+            else{
+                MvaDistance = movingAverage(distanceArray, rawDistance, distanceIndex);
+            }
+
             distanceIndex++;
-            String distanceString = String.format("%.2f", distance);
-            distanceDisplay.setText(distanceString);
-            Log.d(TAG,"Distance: " + distanceString);
+            mvaDistanceString = String.format("%.2f", MvaDistance);
+            mvaDistanceDisplay.setText(mvaDistanceString);
+            Log.d(TAG,"MVA Distance: " + mvaDistanceString);
+
+            rawDistanceString = String.format("%.2f", rawDistance);
+            rawDistanceDisplay.setText(rawDistanceString);
+            Log.d(TAG,"RAW Distance: " + rawDistanceString);
+
+            addValuesToGraph(lineChart, distanceIndex, rawDistance, MvaDistance);
+
         }
         if (rangingResult.getPosition().getAzimuth() != null) {
             String azimuthString = String.valueOf(rangingResult.getPosition().getAzimuth().getValue());
-            azimuthDisplay.setText(azimuthString);
+            rawDistanceDisplay.setText(azimuthString);
             Log.d(TAG,"Azimuth: " + azimuthString);
         }
-        if (rangingResult.getPosition().getElevation() != null) {
-            String elevationString = String.valueOf(rangingResult.getPosition().getElevation().getValue());
-            elevationDisplay.setText(elevationString);
-            Log.d(TAG,"Elevation: " + elevationString);
-        }
     }
+
     public static double movingAverage(double[] arr, double newMeas, int index) {
 
-        // Check if the new measurement is too far from the current average
+        // Get the current average of the array
         double currentAverage = getArrayAverage(arr);
-        if(Math.abs(currentAverage - newMeas) > DISTANCE_HYSTERESIS){
+
+        // Adjust newMeas if it deviates too much from current average
+        if (Math.abs(currentAverage - newMeas) > DISTANCE_HYSTERESIS_METERS) {
             newMeas = currentAverage;
         }
 
-        // Handle the case when the array is not full
-        if(index == 0){
-            Arrays.fill(arr, newMeas);
-            return newMeas;
-        }
-        else {
-            arr[index % arr.length] = newMeas;
-        }
+        // Update array element at index position (circular)
+        arr[index % arr.length] = newMeas;
 
+        // Return the updated average
         return getArrayAverage(arr);
     }
 
+    // Calculate the average of the array
     private static double getArrayAverage(double[] arr) {
         double sum = 0;
         for (double i : arr) {
             sum += i;
         }
         return sum / arr.length;
+    }
+
+    private static void addValuesToGraph(LineChart lineChart, int index, double rawDistance, double mvaDistance){
+        LineData lineData = lineChart.getData();
+        LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
+        LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
+
+        Entry rawEntry = new Entry(index, (float) rawDistance);
+        Entry mvaEntry = new Entry(index, (float) mvaDistance);
+
+        rawDataSet.addEntry(rawEntry);
+        mvaDataSet.addEntry(mvaEntry);
+
+        lineData.notifyDataChanged();
+        lineChart.notifyDataSetChanged();
+        lineChart.invalidate();
     }
 
     private void MacAddressAlertDialog(View view, byte[] macAddress, String role){

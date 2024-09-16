@@ -34,4 +34,5 @@ dependencies {
     implementation 'androidx.core.uwb:uwb:1.0.0-alpha08'
     implementation 'androidx.core.uwb:uwb-rxjava3:1.0.0-alpha08'
     implementation 'com.google.guava:guava:32.0.1-jre'
+    implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
 }
