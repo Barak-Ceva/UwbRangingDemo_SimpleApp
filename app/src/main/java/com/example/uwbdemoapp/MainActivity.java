@@ -1,49 +1,38 @@
 package com.example.uwbdemoapp;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
 import android.view.View;
+import android.widget.Button;
 import android.widget.Switch;
 import android.widget.TextView;
-import android.graphics.Color;
-import android.content.Intent;
-import android.net.Uri;
 
-import androidx.core.content.FileProvider;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.uwb.RangingParameters;
-import androidx.core.uwb.RangingResult;
-import androidx.core.uwb.UwbAddress;
-import androidx.core.uwb.UwbClientSessionScope;
-import androidx.core.uwb.UwbComplexChannel;
-import androidx.core.uwb.UwbControleeSessionScope;
-import androidx.core.uwb.UwbControllerSessionScope;
-import androidx.core.uwb.UwbDevice;
-import androidx.core.uwb.UwbManager;
-import androidx.core.uwb.rxjava3.UwbClientSessionScopeRx;
-import androidx.core.uwb.rxjava3.UwbManagerRx;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.concurrent.atomic.AtomicReference;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-
-import io.reactivex.rxjava3.disposables.Disposable;
+import androidx.core.content.FileProvider;
+import androidx.core.uwb.*;
 
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+import io.reactivex.rxjava3.disposables.Disposable;
 
 
 
@@ -61,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int NUM_MEASUREMENTS = 10;
     private static final double[] distanceArray = new double[NUM_MEASUREMENTS];
-    private static int distanceIndex = 0;
+    private static long distanceIndex = 0;
     private static final int DISTANCE_HYSTERESIS_METERS = 10;
 
     private static final double[] azimuthArray = new double[NUM_MEASUREMENTS];
@@ -72,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.UWB_RANGING) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.UWB_RANGING}, 123);
         }
@@ -79,15 +69,12 @@ public class MainActivity extends AppCompatActivity {
         UwbManager uwbManager = UwbManager.createInstance(this);
         AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
 
-
         Button initRangingButton = findViewById(R.id.get_values_button);
         Button startRangingButton = findViewById(R.id.communicate_button);
         Switch roleSwitch = findViewById(R.id.is_controller);
         TextView role = findViewById(R.id.role_text_view);
-
         TextView distanceDisplay = findViewById(R.id.distance_display);
         TextView rawDistanceDisplay = findViewById(R.id.raw_distance_display);
-
         LineChart lineChart = findViewById(R.id.line_chart);
         Button sendEmailButton = findViewById(R.id.send_email_button);
 
@@ -101,8 +88,6 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         });
-
-
 
         new Thread(() -> {
             AtomicReference<UwbClientSessionScope> currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
@@ -188,79 +173,9 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    private File generateCSVFile(LineChart lineChart) throws IOException {
-        File csvFile = new File(getExternalFilesDir(null), "chart_data.csv");
-        FileWriter writer = new FileWriter(csvFile);
-
-        LineData lineData = lineChart.getData();
-        if (lineData != null) {
-            // Assuming there are exactly two data sets
-            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0);
-            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1);
-
-            List<Entry> entries1 = dataSet1.getEntriesForXValue(0);
-            List<Entry> entries2 = dataSet2.getEntriesForXValue(0);
-
-            // Write header
-            writer.append(dataSet1.getLabel()).append(",").append(dataSet2.getLabel()).append("\n");
-
-            // Write data
-            for (int i = 0; i < entries1.size(); i++) {
-                Entry entry1 = entries1.get(i);
-                Entry entry2 = entries2.get(i);
-                Log.d(TAG, "Entry1: " + entry1.getX() + ", " + entry1.getY());
-                writer.append(String.valueOf(entry1.getX())).append(",").append(String.valueOf(entry1.getY())).append("\n");
-                writer.append(String.valueOf(entry2.getX())).append(",").append(String.valueOf(entry2.getY())).append("\n");
-            }
-        }
-
-        writer.flush();
-        writer.close();
-        return csvFile;
-    }
-
-
-    private void sendEmail(File csvFile) {
-        Uri contentUri = FileProvider.getUriForFile(this, "com.example.uwbdemoapp.fileprovider", csvFile);
-
-        Intent emailIntent = new Intent(Intent.ACTION_SEND);
-        emailIntent.setType("text/csv");
-        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Chart Data");
-        emailIntent.putExtra(Intent.EXTRA_TEXT, "Please find the chart data attached.");
-        emailIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
-        emailIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        startActivity(Intent.createChooser(emailIntent, "Send email using:"));
-    }
-
-    private void initChart(LineChart lineChart) {
-        List<Entry> rawEntries = new ArrayList<>();
-        List<Entry> mvaEntries = new ArrayList<>();
-
-        LineDataSet rawDataSet = new LineDataSet(rawEntries, "Raw Distance");
-        LineDataSet mvaDataSet = new LineDataSet(mvaEntries, "MVA Distance");
-//
-//        rawDataSet.addEntry(new Entry(1, 0));
-//        rawDataSet.addEntry(new Entry(2, 10));
-//
-//        mvaDataSet.addEntry(new Entry(1, 20));
-//        mvaDataSet.addEntry(new Entry(2, 30));
-
-
-        // Set colors for the datasets
-        rawDataSet.setColor(Color.RED); // Line color
-        rawDataSet.setCircleColor(Color.RED); // Dot color
-
-        mvaDataSet.setColor(Color.GREEN); // Line color
-        mvaDataSet.setCircleColor(Color.GREEN); // Dot color
-
-        LineData lineData = new LineData(rawDataSet, mvaDataSet);
-        lineChart.setData(lineData);
-        lineChart.invalidate(); // Refresh the chart
-    }
-
     private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay, LineChart lineChart) {
         if (rangingResult.getPosition().getDistance() != null) {
+//            Log.d("q1w2e3r4","Tick");
 
             double MvaDistance;
             String mvaDistanceString;
@@ -295,48 +210,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public static double movingAverage(double[] arr, double newMeas, int index) {
-
-        // Get the current average of the array
-        double currentAverage = getArrayAverage(arr);
-
-        // Adjust newMeas if it deviates too much from current average
-        if (Math.abs(currentAverage - newMeas) > DISTANCE_HYSTERESIS_METERS) {
-            newMeas = currentAverage;
-        }
-
-        // Update array element at index position (circular)
-        arr[index % arr.length] = newMeas;
-
-        // Return the updated average
-        return getArrayAverage(arr);
-    }
-
-    // Calculate the average of the array
-    private static double getArrayAverage(double[] arr) {
-        double sum = 0;
-        for (double i : arr) {
-            sum += i;
-        }
-        return sum / arr.length;
-    }
-
-    private static void addValuesToGraph(LineChart lineChart, int index, double rawDistance, double mvaDistance){
-        LineData lineData = lineChart.getData();
-        LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
-        LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
-
-        Entry rawEntry = new Entry(index, (float) rawDistance);
-        Entry mvaEntry = new Entry(index, (float) mvaDistance);
-
-        rawDataSet.addEntry(rawEntry);
-        mvaDataSet.addEntry(mvaEntry);
-
-        lineData.notifyDataChanged();
-        lineChart.notifyDataSetChanged();
-        lineChart.invalidate();
-    }
-
     private void MacAddressAlertDialog(View view, byte[] macAddress, String role){
         new AlertDialog.Builder(
                 view.getContext()).setTitle(role).
@@ -355,4 +228,118 @@ public class MainActivity extends AppCompatActivity {
         }
         return hexString.toString();
     }
+
+    public static double movingAverage(double[] arr, double newMeas, long index) {
+
+        // Get the current average of the array
+        double currentAverage = getArrayAverage(arr);
+
+        // Adjust newMeas if it deviates too much from current average
+        if (Math.abs(currentAverage - newMeas) > DISTANCE_HYSTERESIS_METERS) {
+            newMeas = currentAverage;
+        }
+
+        // Update array element at index position (circular)
+        arr[(int) (index % arr.length)] = newMeas;
+
+        // Return the updated average
+        return getArrayAverage(arr);
+    }
+
+    // Calculate the average of the array
+    private static double getArrayAverage(double[] arr) {
+        double sum = 0;
+        for (double i : arr) {
+            sum += i;
+        }
+        return sum / arr.length;
+    }
+
+    private void initChart(LineChart lineChart) {
+        List<Entry> rawEntries = new ArrayList<>();
+        List<Entry> mvaEntries = new ArrayList<>();
+
+        LineDataSet rawDataSet = new LineDataSet(rawEntries, "Raw Distance");
+        LineDataSet mvaDataSet = new LineDataSet(mvaEntries, "MVA Distance");
+//
+//        rawDataSet.addEntry(new Entry(1, 0));
+//        rawDataSet.addEntry(new Entry(2, 10));
+//
+//        mvaDataSet.addEntry(new Entry(1, 20));
+//        mvaDataSet.addEntry(new Entry(2, 30));
+
+
+        // Set colors for the datasets
+        rawDataSet.setColor(Color.RED); // Line color
+        rawDataSet.setCircleColor(Color.RED); // Dot color
+
+        mvaDataSet.setColor(Color.GREEN); // Line color
+        mvaDataSet.setCircleColor(Color.GREEN); // Dot color
+
+        LineData lineData = new LineData(rawDataSet, mvaDataSet);
+        lineChart.setData(lineData);
+        lineChart.invalidate(); // Refresh the chart
+    }
+
+    private static void addValuesToGraph(LineChart lineChart, long index, double rawDistance, double mvaDistance){
+        LineData lineData = lineChart.getData();
+        LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
+        LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
+
+        Entry rawEntry = new Entry(index, (float) rawDistance);
+        Entry mvaEntry = new Entry(index, (float) mvaDistance);
+
+        rawDataSet.addEntry(rawEntry);
+        mvaDataSet.addEntry(mvaEntry);
+
+        lineData.notifyDataChanged();
+        lineChart.notifyDataSetChanged();
+        lineChart.invalidate();
+    }
+
+    private File generateCSVFile(LineChart lineChart) throws IOException {
+        File csvFile = new File(getExternalFilesDir(null), "chart_data.csv");
+        FileWriter writer = new FileWriter(csvFile);
+
+        LineData lineData = lineChart.getData();
+        if (lineData != null) {
+            // Assuming there are exactly two data sets
+            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0);
+            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1);
+
+            List<Entry> entries1 = dataSet1.getEntriesForXValue(0);
+            List<Entry> entries2 = dataSet2.getEntriesForXValue(0);
+
+            // Write header
+            writer.append(dataSet1.getLabel()).append(",").append(dataSet2.getLabel()).append("\n");
+
+            // Write data
+            for (int i = 0; i < entries1.size(); i++) {
+                Entry entry1 = entries1.get(i);
+                Entry entry2 = entries2.get(i);
+                Log.d(TAG, "Entry1: " + entry1.getX() + ", " + entry1.getY());
+                writer.append(String.valueOf(entry1.getX())).append(",").append(String.valueOf(entry1.getY())).append("\n");
+                writer.append(String.valueOf(entry2.getX())).append(",").append(String.valueOf(entry2.getY())).append("\n");
+            }
+        }
+
+        writer.flush();
+        writer.close();
+        return csvFile;
+    }
+
+    private void sendEmail(File csvFile) {
+        Uri contentUri = FileProvider.getUriForFile(this, "com.example.uwbdemoapp.fileprovider", csvFile);
+
+        Intent emailIntent = new Intent(Intent.ACTION_SEND);
+        emailIntent.setType("text/csv");
+        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Chart Data");
+        emailIntent.putExtra(Intent.EXTRA_TEXT, "Please find the chart data attached.");
+        emailIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+        emailIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        startActivity(Intent.createChooser(emailIntent, "Send email using:"));
+    }
+
+
 }
