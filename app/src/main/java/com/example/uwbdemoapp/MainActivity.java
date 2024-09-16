@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.content.Intent;
 import android.net.Uri;
 
+
 import androidx.core.content.FileProvider;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -31,6 +32,10 @@ import androidx.core.uwb.rxjava3.UwbManagerRx;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
 import java.io.File;
 import java.io.FileWriter;
@@ -42,8 +47,6 @@ import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
-import java.util.ArrayList;
-import java.util.List;
 
 
 
@@ -188,36 +191,56 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
+
+    // Function to generate a CSV file with data from a LineChart
     private File generateCSVFile(LineChart lineChart) throws IOException {
-        File csvFile = new File(getExternalFilesDir(null), "chart_data.csv");
+        // Generate a timestamp using the current date and time for unique file naming
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+
+        // Create a new CSV file in the external files directory with the timestamp in the filename
+        File csvFile = new File(getExternalFilesDir(null), "chart_data_" + timestamp + ".csv");
+
+        // Initialize a FileWriter to write data into the CSV file
         FileWriter writer = new FileWriter(csvFile);
 
+        // Retrieve the data object from the LineChart, which contains all datasets
         LineData lineData = lineChart.getData();
         if (lineData != null) {
-            // Assuming there are exactly two data sets
-            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0);
-            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1);
+            // Assuming there are exactly two datasets of equal length, retrieve them by index
+            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0); // First dataset
+            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1); // Second dataset
 
-            List<Entry> entries1 = dataSet1.getEntriesForXValue(0);
-            List<Entry> entries2 = dataSet2.getEntriesForXValue(0);
+            // Write the header line to the CSV with the labels of the two datasets
+            writer.append("Index,")
+                    .append(dataSet1.getLabel()).append(",")
+                    .append(dataSet2.getLabel()).append("\n");
 
-            // Write header
-            writer.append(dataSet1.getLabel()).append(",").append(dataSet2.getLabel()).append("\n");
+            // Iterate through the entries of the datasets, assuming equal lengths
+            for (int i = 0; i < dataSet1.getEntryCount(); i++) {
+                // Retrieve entries from both datasets
+                Entry entry1 = dataSet1.getEntryForIndex(i);
+                Entry entry2 = dataSet2.getEntryForIndex(i);
 
-            // Write data
-            for (int i = 0; i < entries1.size(); i++) {
-                Entry entry1 = entries1.get(i);
-                Entry entry2 = entries2.get(i);
-                Log.d(TAG, "Entry1: " + entry1.getX() + ", " + entry1.getY());
-                writer.append(String.valueOf(entry1.getX())).append(",").append(String.valueOf(entry1.getY())).append("\n");
-                writer.append(String.valueOf(entry2.getX())).append(",").append(String.valueOf(entry2.getY())).append("\n");
+                // Write the index (1-based) and the corresponding Y-values from both datasets to the CSV
+                writer.append(String.valueOf(i + 1))  // Index starts at 1 for readability
+                        .append(",")                    // Separate index with a comma
+                        .append(String.valueOf(entry1.getY())) // Append Y-value from the first dataset
+                        .append(",")                    // Separate values with a comma
+                        .append(String.valueOf(entry2.getY())) // Append Y-value from the second dataset
+                        .append("\n");                  // End the line
             }
         }
 
+        // Flush and close the writer to ensure all data is written and resources are released
         writer.flush();
         writer.close();
+
+        // Return the created CSV file to the caller
         return csvFile;
     }
+
+
+
 
 
     private void sendEmail(File csvFile) {
