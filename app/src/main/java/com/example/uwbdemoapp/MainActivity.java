@@ -49,10 +49,23 @@ import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 
 
-
 public class MainActivity extends AppCompatActivity {
 
+    private Button initRangingButton;
+    private Button startRangingButton;
+    private Button stopRangingButton;
+    private Switch roleSwitch;
+    private TextView role;
+
+    private TextView distanceDisplay;
+    private TextView rawDistanceDisplay;
+
+    private LineChart lineChart;
+    private Button resetGraphButton;
+    private Button sendEmailButton;
+
     private AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
+    private UwbManager uwbManager;
 
     private static final String TAG = "DemoUwbApp";
 
@@ -82,24 +95,110 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.UWB_RANGING}, 123);
         }
 
-        UwbManager uwbManager = UwbManager.createInstance(this);
+        uwbManager = UwbManager.createInstance(this);
+
+        InitUIElements();
+
+        InitUIListeners();
+
+        manageUWBSession();
+    }
+
+    private void setupInitRangingButton(AtomicReference<UwbClientSessionScope> currentUwbSessionScope) {
+        initRangingButton.setOnClickListener(view -> {
+            if (rangingResultObservable.get() != null) {
+                rangingResultObservable.get().dispose();
+                rangingResultObservable.set(null);
+            }
+
+            if (roleSwitch.isChecked()) {
+                // CONTROLLER
+                currentUwbSessionScope.set(UwbManagerRx.controllerSessionScopeSingle(uwbManager).blockingGet());
+                UwbControllerSessionScope controllerSessionScope = (UwbControllerSessionScope) currentUwbSessionScope.get();
+                MacAddressAlertDialog(view, controllerSessionScope.getLocalAddress().getAddress(), "Controller");
+            } else {
+                // CONTROLLEE
+                currentUwbSessionScope.set(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
+                UwbControleeSessionScope controleeSessionScope = (UwbControleeSessionScope) currentUwbSessionScope.get();
+                MacAddressAlertDialog(view, controleeSessionScope.getLocalAddress().getAddress(), "Controlee");
+            }
+        });
+    }
 
 
-        Button initRangingButton = findViewById(R.id.init_ranging_button);
-        Button startRangingButton = findViewById(R.id.start_ranging_button);
-        Button stopRangingButton = findViewById(R.id.stop_ranging_button); // New button
-        Switch roleSwitch = findViewById(R.id.is_controller);
-        TextView role = findViewById(R.id.role_text_view);
+    private void setupStartRangingButton(AtomicReference<UwbClientSessionScope> currentUwbSessionScope) {
+        startRangingButton.setOnClickListener(view -> {
+            try {
+                UwbComplexChannel uwbComplexChannel = new UwbComplexChannel(UWB_CHANNEL, UWB_PREAMBLE_INDEX);
+                UwbDevice uwbDevice = new UwbDevice(new UwbAddress(DEVICE_ADDRESS_STR));
+                RangingParameters rangingParameters = new RangingParameters(
+                        PROFILE_ID,
+                        SESSION_ID,
+                        0,
+                        SESSION_KEY,
+                        null,
+                        uwbComplexChannel,
+                        Collections.singletonList(uwbDevice),
+                        RangingParameters.RANGING_UPDATE_RATE_AUTOMATIC
+                );
 
-        TextView distanceDisplay = findViewById(R.id.distance_display);
-        TextView rawDistanceDisplay = findViewById(R.id.raw_distance_display);
+                rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(rangingResult -> {
+                            if (rangingResult instanceof RangingResult.RangingResultPosition) {
+                                handleRangingResult((RangingResult.RangingResultPosition) rangingResult, distanceDisplay, rawDistanceDisplay, lineChart);
+                            } else if (rangingResult instanceof RangingResult.RangingResultPeerDisconnected) {
+//                                // Display dialog to inform about lost connection
+//                                new AlertDialog.Builder(view.getContext()).setTitle("Controller")
+//                                        .setMessage("Connection lost..").setNeutralButton("OK", (a, b) -> {}).create().show();
 
-        LineChart lineChart = findViewById(R.id.line_chart);
-        Button resetGraphButton = findViewById(R.id.reset_graph_button);
-        Button sendEmailButton = findViewById(R.id.send_email_button);
+                                stopRanging(rangingResultObservable);
+                            }
+                        }, // onNext
+                        System.out::println, // onError
+                        () -> Log.d(TAG, "Completed the observing of RangingResults") // onCompleted
+                ));
+
+            } catch (NumberFormatException e) {
+                Log.d(TAG, "Caught Exception: " + e);
+            }
+        });
+    }
+
+
+    private void setupStopRangingButton() {
+        stopRangingButton.setOnClickListener(view -> {
+            showRangingStopAlertDialog();
+        });
+    }
+
+
+    private void manageUWBSession() {
+        new Thread(() -> {
+            AtomicReference<UwbClientSessionScope> currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
+
+            setupInitRangingButton(currentUwbSessionScope);
+            setupStartRangingButton(currentUwbSessionScope);
+            setupStopRangingButton();
+        }).start();
+    }
+
+    private void InitUIElements() {
+        initRangingButton = findViewById(R.id.init_ranging_button);
+        startRangingButton = findViewById(R.id.start_ranging_button);
+        stopRangingButton = findViewById(R.id.stop_ranging_button); // New button
+        roleSwitch = findViewById(R.id.is_controller);
+        role = findViewById(R.id.role_text_view);
+
+        distanceDisplay = findViewById(R.id.distance_display);
+        rawDistanceDisplay = findViewById(R.id.raw_distance_display);
+
+        lineChart = findViewById(R.id.line_chart);
+        resetGraphButton = findViewById(R.id.reset_graph_button);
+        sendEmailButton = findViewById(R.id.send_email_button);
 
         initGraph(lineChart);
+    }
 
+    private void InitUIListeners() {
         sendEmailButton.setOnClickListener(v -> {
             try {
                 File csvFile = generateCSVFile(lineChart);
@@ -112,77 +211,6 @@ public class MainActivity extends AppCompatActivity {
         resetGraphButton.setOnClickListener(v -> {
             resetGraph(lineChart);
         });
-
-        new Thread(() -> {
-            AtomicReference<UwbClientSessionScope> currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
-
-            roleSwitch.setOnClickListener((v -> {
-                if (roleSwitch.isChecked()) {
-                    role.setText("Controller");
-                } else {
-                    role.setText("Controlee");
-                }
-            }));
-            roleSwitch.callOnClick();
-
-            initRangingButton.setOnClickListener((view) -> {
-                if (rangingResultObservable.get() != null) {
-                    rangingResultObservable.get().dispose();
-                    rangingResultObservable.set(null);
-                }
-
-                if (roleSwitch.isChecked()) {
-                    // CONTROLLER
-                    currentUwbSessionScope.set(UwbManagerRx.controllerSessionScopeSingle(uwbManager).blockingGet());
-                    UwbControllerSessionScope controllerSessionScope = (UwbControllerSessionScope) currentUwbSessionScope.get();
-                    MacAddressAlertDialog(view, controllerSessionScope.getLocalAddress().getAddress(), "Controller");
-                } else {
-                    // CONTROLLEE
-                    currentUwbSessionScope.set(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
-                    UwbControleeSessionScope controleeSessionScope = (UwbControleeSessionScope) currentUwbSessionScope.get();
-                    MacAddressAlertDialog(view, controleeSessionScope.getLocalAddress().getAddress(), "Controlee");
-                }
-            });
-
-            startRangingButton.setOnClickListener((view -> {
-                try {
-                    UwbComplexChannel uwbComplexChannel = new UwbComplexChannel(UWB_CHANNEL, UWB_PREAMBLE_INDEX);
-                    UwbDevice uwbDevice = new UwbDevice(new UwbAddress(DEVICE_ADDRESS_STR));
-                    RangingParameters rangingParameters = new RangingParameters(
-                            PROFILE_ID,
-                            SESSION_ID,
-                            0,
-                            SESSION_KEY,
-                            null,
-                            uwbComplexChannel,
-                            Collections.singletonList(uwbDevice),
-                            RangingParameters.RANGING_UPDATE_RATE_AUTOMATIC
-                    );
-
-                    rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(rangingResult -> {
-                                if (rangingResult instanceof RangingResult.RangingResultPosition) {
-                                    handleRangingResult((RangingResult.RangingResultPosition) rangingResult, distanceDisplay, rawDistanceDisplay, lineChart);
-                                } else if (rangingResult instanceof RangingResult.RangingResultPeerDisconnected) {
-                                    // Display dialog to inform about lost connection
-                                    new AlertDialog.Builder(view.getContext()).setTitle("Controller")
-                                            .setMessage("Connection lost..").setNeutralButton("OK", (a, b) -> {}).create().show();
-
-                                    stopRanging(rangingResultObservable);
-                                }
-                            }, // onNext
-                            System.out::println, // onError
-                            () -> Log.d(TAG, "Completed the observing of RangingResults") // onCompleted
-                    ));
-
-                } catch (NumberFormatException e) {
-                    Log.d(TAG, "Caught Exception: " + e);
-                }
-            }));
-
-            stopRangingButton.setOnClickListener((view -> {
-                showRangingStopAlertDialog();
-            }));
-        }).start();
     }
 
     @Override
@@ -228,7 +256,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay, LineChart lineChart) {
         if (rangingResult.getPosition().getDistance() != null) {
 
@@ -246,7 +273,7 @@ public class MainActivity extends AppCompatActivity {
             // Update the moving average with the new measurement if it is valid
             } else {
                 if (isValidDistance(rawDistance)) {
-                    mvaDistance = movingAverage(distanceMvaArray, rawDistance, mvaIndex);
+                    mvaDistance = CalculateMovingAverage(distanceMvaArray, rawDistance, mvaIndex);
                 } else {
                     return;
                 }
@@ -287,7 +314,7 @@ public class MainActivity extends AppCompatActivity {
         return condition;
     }
 
-    public static double movingAverage(double[] arr, double newMeas, int index) {
+    public static double CalculateMovingAverage(double[] arr, double newMeas, int index) {
 
         // Update array element at index position (circular)
         arr[index] = newMeas;
@@ -420,28 +447,12 @@ public class MainActivity extends AppCompatActivity {
         return csvFile;
     }
 
-
-
-
-
-
-
     private void MacAddressAlertDialog(View view, byte[] macAddress, String role){
         new AlertDialog.Builder(
                 view.getContext()).setTitle(role).
-                setMessage("Your MAC Address is: " + toHexLittleEndian(macAddress))
+                setMessage("Your MAC Address is: " + Utils.convertBytesToHexLittleEndian(macAddress))
                 .setNeutralButton("OK", (a, b) -> {
                 }).create().show();
     }
 
-    private String toHexLittleEndian(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (int i = bytes.length - 1; i >= 0; i--) {
-            if (i < bytes.length - 1) {
-                hexString.append(":");
-            }
-            hexString.append(String.format("%02X", bytes[i]));
-        }
-        return hexString.toString();
-    }
 }
