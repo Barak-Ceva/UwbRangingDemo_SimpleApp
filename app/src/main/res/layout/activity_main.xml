@@ -39,19 +39,29 @@
                 android:textAppearance="@style/TextAppearance.AppCompat.Display1" />
 
             <Button
-                android:id="@+id/get_values_button"
+                android:id="@+id/init_ranging_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
                 android:text="Init Ranging" />
 
             <Button
-                android:id="@+id/communicate_button"
+                android:id="@+id/start_ranging_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
                 android:layout_marginBottom="32dp"
                 android:text="Start Ranging" />
+
+            <Button
+                android:id="@+id/stop_ranging_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="32dp"
+                android:text="Stop Ranging" />
+
+
 
             <TextView
                 android:id="@+id/textView8"
@@ -90,6 +100,13 @@
                 android:layout_height="300dp"
                 android:layout_marginTop="32dp" />
 
+
+            <Button
+                android:id="@+id/reset_graph_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:text="Reset Graph" />
 
             <Button
                 android:id="@+id/send_email_button"
