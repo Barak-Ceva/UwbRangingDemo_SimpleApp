@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.graphics.Color;
@@ -49,6 +50,9 @@ import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 
 
+import android.text.Editable;
+import android.text.TextWatcher;
+
 public class MainActivity extends AppCompatActivity {
 
     private Button initRangingButton;
@@ -57,14 +61,17 @@ public class MainActivity extends AppCompatActivity {
     private Switch roleSwitch;
     private TextView role;
 
-    private TextView distanceDisplay;
+    private TextView mvaDistanceDisplay;
     private TextView rawDistanceDisplay;
 
     private LineChart lineChart;
     private Button resetGraphButton;
     private Button sendEmailButton;
+    private EditText offsetEditText;
 
-    private AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
+    private static int mOffset_cm = 0;
+
+    private final AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
     private UwbManager uwbManager;
 
     private static final String TAG = "DemoUwbApp";
@@ -103,6 +110,7 @@ public class MainActivity extends AppCompatActivity {
 
         manageUWBSession();
     }
+
 
     private void setupInitRangingButton(AtomicReference<UwbClientSessionScope> currentUwbSessionScope) {
         initRangingButton.setOnClickListener(view -> {
@@ -144,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
 
                 rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(rangingResult -> {
                             if (rangingResult instanceof RangingResult.RangingResultPosition) {
-                                handleRangingResult((RangingResult.RangingResultPosition) rangingResult, distanceDisplay, rawDistanceDisplay, lineChart);
+                                handleRangingResult((RangingResult.RangingResultPosition) rangingResult, mvaDistanceDisplay, rawDistanceDisplay, lineChart);
                             } else if (rangingResult instanceof RangingResult.RangingResultPeerDisconnected) {
 //                                // Display dialog to inform about lost connection
 //                                new AlertDialog.Builder(view.getContext()).setTitle("Controller")
@@ -188,12 +196,13 @@ public class MainActivity extends AppCompatActivity {
         roleSwitch = findViewById(R.id.is_controller);
         role = findViewById(R.id.role_text_view);
 
-        distanceDisplay = findViewById(R.id.distance_display);
+        mvaDistanceDisplay = findViewById(R.id.distance_display);
         rawDistanceDisplay = findViewById(R.id.raw_distance_display);
 
         lineChart = findViewById(R.id.line_chart);
         resetGraphButton = findViewById(R.id.reset_graph_button);
         sendEmailButton = findViewById(R.id.send_email_button);
+        offsetEditText = findViewById(R.id.offset_edit_text);
 
         initGraph(lineChart);
     }
@@ -209,8 +218,32 @@ public class MainActivity extends AppCompatActivity {
         });
 
         resetGraphButton.setOnClickListener(v -> {
-            resetGraph(lineChart);
+            resetUIElements();
         });
+
+        offsetEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // Do nothing
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // Do nothing
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (!s.toString().isEmpty()) {
+                    int value = Integer.parseInt(s.toString());
+                    updateOffset(value);
+                }
+            }
+        });
+    }
+
+    private void updateOffset(int offset_cm) {
+        mOffset_cm = offset_cm;
     }
 
     @Override
@@ -263,6 +296,7 @@ public class MainActivity extends AppCompatActivity {
             double mvaDistance;
 
             rawDistance = rangingResult.getPosition().getDistance().getValue();
+            rawDistance -= (double) mOffset_cm / 100;
 
             // Initialize all array cells with the first measurement
             if (isFirstMeasurement) {
@@ -359,6 +393,16 @@ public class MainActivity extends AppCompatActivity {
         lineChart.invalidate(); // Refresh the chart
     }
 
+    private void resetUIElements() {
+        resetDistanceUI();
+        resetGraph(lineChart);
+    }
+
+    private void resetDistanceUI() {
+        mvaDistanceDisplay.setText("0.00");
+        rawDistanceDisplay.setText("0.00");
+    }
+
     private void resetGraph(LineChart lineChart) {
         LineData lineData = lineChart.getData();
         LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
@@ -370,6 +414,8 @@ public class MainActivity extends AppCompatActivity {
         lineData.notifyDataChanged();
         lineChart.notifyDataSetChanged();
         lineChart.invalidate();
+
+
     }
 
     private static void addValuesToGraph(LineChart lineChart, double rawDistance, double mvaDistance){
@@ -377,10 +423,10 @@ public class MainActivity extends AppCompatActivity {
         LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
         LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
 
-        Entry rawEntry = new Entry(rawDataSet.getEntryCount() + 1, (float) rawDistance);
+//        Entry rawEntry = new Entry(rawDataSet.getEntryCount() + 1, (float) rawDistance);
         Entry mvaEntry = new Entry(mvaDataSet.getEntryCount() + 1, (float) mvaDistance);
 
-        rawDataSet.addEntry(rawEntry);
+//        rawDataSet.addEntry(rawEntry);
         mvaDataSet.addEntry(mvaEntry);
 
         lineData.notifyDataChanged();
