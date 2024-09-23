@@ -131,6 +131,8 @@ public class MainActivity extends AppCompatActivity {
                 UwbControleeSessionScope controleeSessionScope = (UwbControleeSessionScope) currentUwbSessionScope.get();
                 MacAddressAlertDialog(view, controleeSessionScope.getLocalAddress().getAddress(), "Controlee");
             }
+            startRangingButton.setEnabled(true);
+            initRangingButton.setEnabled(false);
         });
     }
 
@@ -166,6 +168,9 @@ public class MainActivity extends AppCompatActivity {
                         System.out::println, // onError
                         () -> Log.d(TAG, "Completed the observing of RangingResults") // onCompleted
                 ));
+
+                stopRangingButton.setEnabled(true);
+                startRangingButton.setEnabled(false);
 
             } catch (NumberFormatException e) {
                 Log.d(TAG, "Caught Exception: " + e);
@@ -291,6 +296,8 @@ public class MainActivity extends AppCompatActivity {
                     .setMessage("Ranging has been stopped.")
                     .setNeutralButton("OK", null)
                     .show();
+            initRangingButton.setEnabled(true);
+            stopRangingButton.setEnabled(false);
 
             Log.d(TAG, "Ranging stopped.");
         } else {
