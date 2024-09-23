@@ -72,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
     private static int mOffset_cm = 0;
 
     private final AtomicReference<Disposable> rangingResultObservable = new AtomicReference<>(null);
+    private AtomicReference<UwbClientSessionScope> currentUwbSessionScope;
     private UwbManager uwbManager;
 
     private static final String TAG = "DemoUwbApp";
@@ -134,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+
     private void setupStartRangingButton(AtomicReference<UwbClientSessionScope> currentUwbSessionScope) {
         startRangingButton.setOnClickListener(view -> {
             try {
@@ -181,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void manageUWBSession() {
         new Thread(() -> {
-            AtomicReference<UwbClientSessionScope> currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
+            currentUwbSessionScope = new AtomicReference<>(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
 
             setupInitRangingButton(currentUwbSessionScope);
             setupStartRangingButton(currentUwbSessionScope);
@@ -275,10 +277,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopRanging(AtomicReference<Disposable> rangingResultObservable) {
 
+        // Dispose the observable if it's active
         if (rangingResultObservable.get() != null) {
             rangingResultObservable.get().dispose();
             rangingResultObservable.set(null);
 
+            // Nullify the session scope reference to indicate the session is stopped
+            currentUwbSessionScope.set(null);
+
+            // Optionally show a confirmation dialog or log the stopping of the session
             new AlertDialog.Builder(MainActivity.this)
                     .setTitle("Ranging Stopped")
                     .setMessage("Ranging has been stopped.")
@@ -286,6 +293,8 @@ public class MainActivity extends AppCompatActivity {
                     .show();
 
             Log.d(TAG, "Ranging stopped.");
+        } else {
+            Log.d(TAG, "No active ranging session to stop.");
         }
     }
 
