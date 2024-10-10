@@ -64,10 +64,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView mvaDistanceDisplay;
     private TextView rawDistanceDisplay;
 
-    private LineChart lineChart;
-    private Button resetGraphButton;
-    private Button sendEmailButton;
-    private EditText offsetEditText;
 
     private static int mOffset_cm = 0;
 
@@ -107,7 +103,6 @@ public class MainActivity extends AppCompatActivity {
 
         InitUIElements();
 
-        InitUIListeners();
 
         manageUWBSession();
     }
@@ -122,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (roleSwitch.isChecked()) {
                 // CONTROLLER
+                // Creating the controller session scope
                 currentUwbSessionScope.set(UwbManagerRx.controllerSessionScopeSingle(uwbManager).blockingGet());
                 UwbControllerSessionScope controllerSessionScope = (UwbControllerSessionScope) currentUwbSessionScope.get();
                 MacAddressAlertDialog(view, controllerSessionScope.getLocalAddress().getAddress(), "Controller");
@@ -154,9 +150,10 @@ public class MainActivity extends AppCompatActivity {
                         RangingParameters.RANGING_UPDATE_RATE_AUTOMATIC
                 );
 
-                rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(rangingResult -> {
+                rangingResultObservable.set(UwbClientSessionScopeRx.rangingResultsObservable(currentUwbSessionScope.get(), rangingParameters).subscribe(
+                        rangingResult -> {
                             if (rangingResult instanceof RangingResult.RangingResultPosition) {
-                                handleRangingResult((RangingResult.RangingResultPosition) rangingResult, mvaDistanceDisplay, rawDistanceDisplay, lineChart);
+                                handleRangingResult((RangingResult.RangingResultPosition) rangingResult, mvaDistanceDisplay, rawDistanceDisplay);
                             } else if (rangingResult instanceof RangingResult.RangingResultPeerDisconnected) {
 //                                // Display dialog to inform about lost connection
 //                                new AlertDialog.Builder(view.getContext()).setTitle("Controller")
@@ -206,52 +203,10 @@ public class MainActivity extends AppCompatActivity {
         mvaDistanceDisplay = findViewById(R.id.distance_display);
         rawDistanceDisplay = findViewById(R.id.raw_distance_display);
 
-        lineChart = findViewById(R.id.line_chart);
-        resetGraphButton = findViewById(R.id.reset_graph_button);
-        sendEmailButton = findViewById(R.id.send_email_button);
-        offsetEditText = findViewById(R.id.offset_edit_text);
 
-        initGraph(lineChart);
+
     }
 
-    private void InitUIListeners() {
-        sendEmailButton.setOnClickListener(v -> {
-            try {
-                File csvFile = generateCSVFile(lineChart);
-                sendEmail(csvFile);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-
-        resetGraphButton.setOnClickListener(v -> {
-            resetUIElements();
-        });
-
-        offsetEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // Do nothing
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                // Do nothing
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                if (!s.toString().isEmpty()) {
-                    int value = Integer.parseInt(s.toString());
-                    updateOffset(value);
-                }
-            }
-        });
-    }
-
-    private void updateOffset(int offset_cm) {
-        mOffset_cm = offset_cm;
-    }
 
     @Override
     protected void onPause() {
@@ -305,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay, LineChart lineChart) {
+    private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay) {
         if (rangingResult.getPosition().getDistance() != null) {
 
             double rawDistance;
@@ -331,7 +286,6 @@ public class MainActivity extends AppCompatActivity {
 
             mvaIndex = (mvaIndex + 1) % MVA_NUM_OF_MEASUREMENTS;
             updateDistanceUI(mvaDistanceDisplay, rawDistanceDisplay, mvaDistance, rawDistance);
-            addValuesToGraph(lineChart, rawDistance, mvaDistance);
 
         }
         if (rangingResult.getPosition().getAzimuth() != null) {
@@ -383,130 +337,10 @@ public class MainActivity extends AppCompatActivity {
 //        return Arrays.stream(arr).sum() / arr.length;
     }
 
-    private void initGraph(LineChart lineChart) {
-        List<Entry> rawEntries = new ArrayList<>();
-        List<Entry> mvaEntries = new ArrayList<>();
-
-        LineDataSet rawDataSet = new LineDataSet(rawEntries, "Raw Distance");
-        LineDataSet mvaDataSet = new LineDataSet(mvaEntries, "MVA Distance");
-//
-//        rawDataSet.addEntry(new Entry(1, 0));
-//        rawDataSet.addEntry(new Entry(2, 10));
-//
-//        mvaDataSet.addEntry(new Entry(1, 20));
-//        mvaDataSet.addEntry(new Entry(2, 30));
-
-
-        // Set colors for the datasets
-        rawDataSet.setColor(Color.RED); // Line color
-        rawDataSet.setCircleColor(Color.RED); // Dot color
-
-        mvaDataSet.setColor(Color.GREEN); // Line color
-        mvaDataSet.setCircleColor(Color.GREEN); // Dot color
-
-        LineData lineData = new LineData(rawDataSet, mvaDataSet);
-        lineChart.setData(lineData);
-        lineChart.invalidate(); // Refresh the chart
-    }
-
-    private void resetUIElements() {
-        resetDistanceUI();
-        resetGraph(lineChart);
-    }
 
     private void resetDistanceUI() {
         mvaDistanceDisplay.setText("0.00");
         rawDistanceDisplay.setText("0.00");
-    }
-
-    private void resetGraph(LineChart lineChart) {
-        LineData lineData = lineChart.getData();
-        LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
-        LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
-
-        rawDataSet.clear();
-        mvaDataSet.clear();
-
-        lineData.notifyDataChanged();
-        lineChart.notifyDataSetChanged();
-        lineChart.invalidate();
-
-
-    }
-
-    private static void addValuesToGraph(LineChart lineChart, double rawDistance, double mvaDistance){
-        LineData lineData = lineChart.getData();
-        LineDataSet rawDataSet = (LineDataSet) lineData.getDataSetByIndex(0);
-        LineDataSet mvaDataSet = (LineDataSet) lineData.getDataSetByIndex(1);
-
-//        Entry rawEntry = new Entry(rawDataSet.getEntryCount() + 1, (float) rawDistance);
-        Entry mvaEntry = new Entry(mvaDataSet.getEntryCount() + 1, (float) mvaDistance);
-
-//        rawDataSet.addEntry(rawEntry);
-        mvaDataSet.addEntry(mvaEntry);
-
-        lineData.notifyDataChanged();
-        lineChart.notifyDataSetChanged();
-        lineChart.invalidate();
-    }
-
-    private void sendEmail(File csvFile) {
-        Uri contentUri = FileProvider.getUriForFile(this, "com.example.uwbdemoapp.fileprovider", csvFile);
-
-        Intent emailIntent = new Intent(Intent.ACTION_SEND);
-        emailIntent.setType("text/csv");
-        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Chart Data");
-        emailIntent.putExtra(Intent.EXTRA_TEXT, "Please find the chart data attached.");
-        emailIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
-        emailIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        startActivity(Intent.createChooser(emailIntent, "Send email using:"));
-    }
-
-    private File generateCSVFile(LineChart lineChart) throws IOException {
-        // Generate a timestamp using the current date and time for unique file naming
-        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-
-        // Create a new CSV file in the external files directory with the timestamp in the filename
-        File csvFile = new File(getExternalFilesDir(null), "chart_data_" + timestamp + ".csv");
-
-        // Initialize a FileWriter to write data into the CSV file
-        FileWriter writer = new FileWriter(csvFile);
-
-        // Retrieve the data object from the LineChart, which contains all datasets
-        LineData lineData = lineChart.getData();
-        if (lineData != null) {
-            // Assuming there are exactly two datasets of equal length, retrieve them by index
-            LineDataSet dataSet1 = (LineDataSet) lineData.getDataSetByIndex(0); // First dataset
-            LineDataSet dataSet2 = (LineDataSet) lineData.getDataSetByIndex(1); // Second dataset
-
-            // Write the header line to the CSV with the labels of the two datasets
-            writer.append("Index,")
-                    .append(dataSet1.getLabel()).append(",")
-                    .append(dataSet2.getLabel()).append("\n");
-
-            // Iterate through the entries of the datasets, assuming equal lengths
-            for (int i = 0; i < dataSet1.getEntryCount(); i++) {
-                // Retrieve entries from both datasets
-                Entry entry1 = dataSet1.getEntryForIndex(i);
-                Entry entry2 = dataSet2.getEntryForIndex(i);
-
-                // Write the index (1-based) and the corresponding Y-values from both datasets to the CSV
-                writer.append(String.valueOf(i + 1))  // Index starts at 1 for readability
-                        .append(",")                    // Separate index with a comma
-                        .append(String.valueOf(entry1.getY())) // Append Y-value from the first dataset
-                        .append(",")                    // Separate values with a comma
-                        .append(String.valueOf(entry2.getY())) // Append Y-value from the second dataset
-                        .append("\n");                  // End the line
-            }
-        }
-
-        // Flush and close the writer to ensure all data is written and resources are released
-        writer.flush();
-        writer.close();
-
-        // Return the created CSV file to the caller
-        return csvFile;
     }
 
     private void MacAddressAlertDialog(View view, byte[] macAddress, String role){

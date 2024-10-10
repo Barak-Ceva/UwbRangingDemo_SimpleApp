@@ -40,14 +40,6 @@
                 android:text="Controlee"
                 android:textAppearance="@style/TextAppearance.AppCompat.Display1" />
 
-            <EditText
-                android:id="@+id/offset_edit_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:inputType="number"
-                android:hint="Enter odfffset (cm)" />
-
             <Button
                 android:id="@+id/init_ranging_button"
                 android:layout_width="wrap_content"
@@ -92,13 +84,6 @@
                 android:textAppearance="@style/TextAppearance.AppCompat.Display3" />
 
             <TextView
-                android:id="@+id/textView9"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="RAW Distance" />
-
-            <TextView
                 android:id="@+id/raw_distance_display"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -107,26 +92,6 @@
                 android:visibility="gone"
                 android:textAppearance="@style/TextAppearance.AppCompat.Display3" />
 
-            <com.github.mikephil.charting.charts.LineChart
-                android:id="@+id/line_chart"
-                android:layout_width="match_parent"
-                android:layout_height="300dp"
-                android:layout_marginTop="32dp" />
-
-
-            <Button
-                android:id="@+id/reset_graph_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:text="Reset Graph" />
-
-            <Button
-                android:id="@+id/send_email_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:text="Send Data by Email" />
 
         </LinearLayout>
     </ScrollView>
