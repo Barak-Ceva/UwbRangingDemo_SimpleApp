@@ -32,7 +32,19 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.rxjava3.disposables.Disposable;
 
-public class MainActivity extends AppCompatActivity {
+
+
+import android.bluetooth.BluetoothDevice;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.ArrayList;
+
+
+public class MainActivity extends AppCompatActivity implements BluetoothHelper.BluetoothListener, DialogHelper.DialogListener {
 
     private Button initRangingButton;
     private Button startRangingButton;
@@ -69,10 +81,28 @@ public class MainActivity extends AppCompatActivity {
     private static final double[] azimuthArray = new double[MVA_NUM_OF_MEASUREMENTS];
     private static final double[] elevationArray = new double[MVA_NUM_OF_MEASUREMENTS];
 
+
+    private BluetoothHelper bluetoothHelper;
+    private DialogHelper dialogHelper;
+    private ArrayList<BluetoothDevice> pairedDevicesList;
+    private ArrayList<String> pairedDevicesNames;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+
+        bluetoothHelper = new BluetoothHelper(this);  // Initialize Bluetooth helper
+        dialogHelper = new DialogHelper(this);        // Initialize Dialog helper
+        pairedDevicesList = new ArrayList<>();        // Paired Bluetooth devices list
+        pairedDevicesNames = new ArrayList<>();       // Paired devices names list for displaying
+
+        // Button to show paired devices in a dialog
+        Button pairedDevicesButton = findViewById(R.id.pairedDevicesButton);
+        pairedDevicesButton.setOnClickListener(v -> bluetoothHelper.listPairedDevices());
+
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.UWB_RANGING) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.UWB_RANGING}, 123);
@@ -322,6 +352,53 @@ public class MainActivity extends AppCompatActivity {
                 setMessage("Your MAC Address is: " + Utils.convertBytesToHexLittleEndian(macAddress))
                 .setNeutralButton("OK", (a, b) -> {
                 }).create().show();
+    }
+
+
+    @Override
+    public void onPairedDevicesAvailable(ArrayList<BluetoothDevice> pairedDevices) {
+        pairedDevicesNames.clear();
+        pairedDevicesList.clear();
+
+        pairedDevicesList.addAll(pairedDevices);
+        for (BluetoothDevice device : pairedDevices) {
+            pairedDevicesNames.add(device.getName() + "\n" + device.getAddress());
+        }
+
+        // Show the paired devices dialog
+        dialogHelper.showPairedDevicesDialog(pairedDevicesNames, this);
+    }
+
+    @Override
+    public void onDeviceSelected(String deviceName) {
+        // Find the selected BluetoothDevice based on the name and address and connect
+        for (BluetoothDevice device : pairedDevicesList) {
+            if ((device.getName() + "\n" + device.getAddress()).equals(deviceName)) {
+                bluetoothHelper.connectToDevice(device);  // Call connectToDevice here
+                break;
+            }
+        }
+    }
+
+
+    @Override
+    public void onDeviceConnected(String deviceName) {
+        Toast.makeText(this, "Connected to " + deviceName, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onConnectionFailed() {
+        Toast.makeText(this, "Connection Failed", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onDataSent() {
+        Toast.makeText(this, "Data Sent", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onDisconnected() {
+        Toast.makeText(this, "Disconnected", Toast.LENGTH_SHORT).show();
     }
 
 }

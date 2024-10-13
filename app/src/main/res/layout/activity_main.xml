@@ -41,6 +41,12 @@
                 android:textAppearance="@style/TextAppearance.AppCompat.Display1" />
 
             <Button
+                android:id="@+id/pairedDevicesButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Show Paired Devices" />
+
+            <Button
                 android:id="@+id/init_ranging_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
