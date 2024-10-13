@@ -1,24 +1,19 @@
 package com.example.uwbdemoapp;
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
-import android.graphics.Color;
 
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.core.uwb.RangingParameters;
 import androidx.core.uwb.RangingResult;
 import androidx.core.uwb.UwbAddress;
@@ -33,25 +28,9 @@ import androidx.core.uwb.rxjava3.UwbManagerRx;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.ArrayList;
-import java.util.List;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 
 import io.reactivex.rxjava3.disposables.Disposable;
-
-import com.github.mikephil.charting.charts.LineChart;
-import com.github.mikephil.charting.data.Entry;
-import com.github.mikephil.charting.data.LineData;
-import com.github.mikephil.charting.data.LineDataSet;
-
-
-import android.text.Editable;
-import android.text.TextWatcher;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -335,12 +314,6 @@ public class MainActivity extends AppCompatActivity {
         return sum / arr.length;
 
 //        return Arrays.stream(arr).sum() / arr.length;
-    }
-
-
-    private void resetDistanceUI() {
-        mvaDistanceDisplay.setText("0.00");
-        rawDistanceDisplay.setText("0.00");
     }
 
     private void MacAddressAlertDialog(View view, byte[] macAddress, String role){
