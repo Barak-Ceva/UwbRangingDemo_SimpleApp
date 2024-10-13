@@ -124,18 +124,24 @@ public class MainActivity extends AppCompatActivity implements BluetoothHelper.B
                 rangingResultObservable.set(null);
             }
 
+            String macAddressStr;
             if (roleSwitch.isChecked()) {
                 // CONTROLLER
                 // Creating the controller session scope
                 currentUwbSessionScope.set(UwbManagerRx.controllerSessionScopeSingle(uwbManager).blockingGet());
                 UwbControllerSessionScope controllerSessionScope = (UwbControllerSessionScope) currentUwbSessionScope.get();
+                macAddressStr = Utils.convertBytesToHexLittleEndian(controllerSessionScope.getLocalAddress().getAddress());
                 MacAddressAlertDialog(view, controllerSessionScope.getLocalAddress().getAddress(), "Controller");
+
             } else {
                 // CONTROLLEE
                 currentUwbSessionScope.set(UwbManagerRx.controleeSessionScopeSingle(uwbManager).blockingGet());
                 UwbControleeSessionScope controleeSessionScope = (UwbControleeSessionScope) currentUwbSessionScope.get();
+                macAddressStr = Utils.convertBytesToHexLittleEndian(controleeSessionScope.getLocalAddress().getAddress());
                 MacAddressAlertDialog(view, controleeSessionScope.getLocalAddress().getAddress(), "Controlee");
             }
+
+            bluetoothHelper.sendData("START;" + macAddressStr);
             startRangingButton.setEnabled(true);
             initRangingButton.setEnabled(false);
         });
@@ -217,11 +223,11 @@ public class MainActivity extends AppCompatActivity implements BluetoothHelper.B
     }
 
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        stopRanging(rangingResultObservable);
-    }
+//    @Override
+//    protected void onPause() {
+//        super.onPause();
+//        stopRanging(rangingResultObservable);
+//    }
 
     @Override
     protected void onStop() {
@@ -267,6 +273,11 @@ public class MainActivity extends AppCompatActivity implements BluetoothHelper.B
         } else {
             Log.d(TAG, "No active ranging session to stop.");
         }
+
+        if (bluetoothHelper != null) {
+            bluetoothHelper.sendData("STOP");
+        }
+
     }
 
     private static void handleRangingResult(RangingResult.RangingResultPosition rangingResult, TextView mvaDistanceDisplay, TextView rawDistanceDisplay) {
